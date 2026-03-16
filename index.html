@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Model Radar</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        zinc: {
+                            900: '#18181b',
+                            950: '#09090b',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+        body {
+            background-color: #000000;
+            color: #fafafa;
+            -webkit-font-smoothing: antialiased;
+        }
+        /* Minimalist scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #27272a; 
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3f3f46; 
+        }
+        .glass-nav {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col relative selection:bg-white/20">
+
+    <!-- Navbar -->
+    <nav class="sticky top-0 z-40 glass-nav border-b border-white/10 px-6 py-4">
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
+            <div class="flex items-center gap-3 w-full sm:w-auto">
+                <div class="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center">
+                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-base font-semibold tracking-tight text-white">Model Radar</h1>
+                </div>
+            </div>
+            
+            <div class="flex flex-1 w-full max-w-2xl items-center gap-4">
+                <div class="relative flex-1">
+                    <svg class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                    <input type="text" id="searchInput" placeholder="Search models, orgs, or IDs..." class="w-full bg-zinc-900/50 border border-white/10 rounded-full pl-10 pr-4 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-1 focus:ring-white/30 focus:border-white/30 transition-all placeholder-zinc-500">
+                </div>
+                <button onclick="openIngestModal()" class="flex items-center gap-2 bg-white hover:bg-zinc-200 text-black px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                    </svg>
+                    Export Ingest
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-1 w-full max-w-7xl mx-auto px-6 py-10">
+        
+        <!-- Stats Row -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12 border-b border-white/10 pb-10" id="statsContainer">
+            <!-- Populated by JS -->
+        </div>
+
+        <!-- State Messages -->
+        <div id="loadingState" class="flex flex-col items-center justify-center py-32 text-zinc-500">
+            <svg class="animate-spin w-6 h-6 mb-4 text-zinc-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p class="text-sm">Fetching repository...</p>
+        </div>
+
+        <div id="errorState" class="hidden flex-col items-center justify-center py-32 text-red-400">
+            <p class="text-sm font-medium" id="errorMessage">Failed to load models.</p>
+            <button onclick="fetchModels()" class="mt-4 px-4 py-2 text-sm border border-white/10 rounded-full hover:bg-white/5 transition-colors text-zinc-300">Try Again</button>
+        </div>
+
+        <div id="emptyState" class="hidden flex-col items-center justify-center py-32 text-zinc-500">
+            <p class="text-sm">No models match your query.</p>
+        </div>
+
+        <!-- Models Grid -->
+        <div id="modelsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 hidden">
+            <!-- Cards populated by JS -->
+        </div>
+    </main>
+
+    <!-- Ingest Modal -->
+    <div id="ingestModal" class="fixed inset-0 z-50 hidden bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 opacity-0 transition-opacity duration-300">
+        <div class="bg-[#09090b] border border-white/10 rounded-2xl w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl transform scale-95 transition-transform duration-300" id="modalContent">
+            <div class="flex items-center justify-between p-5 border-b border-white/10">
+                <div>
+                    <h2 class="text-base font-medium text-white">Context Ingest for AI</h2>
+                    <p class="text-xs text-zinc-500 mt-1">Copy this block into your LLM prompt for up-to-date knowledge.</p>
+                </div>
+                <button onclick="closeIngestModal()" class="p-2 text-zinc-500 hover:text-white transition-colors rounded-full hover:bg-white/5">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            
+            <div class="p-5 flex-1 overflow-hidden flex flex-col bg-black/50">
+                <textarea id="ingestTextarea" readonly class="w-full flex-1 bg-transparent border border-white/10 rounded-xl p-4 text-xs font-mono text-zinc-400 focus:outline-none focus:ring-1 focus:ring-white/20 resize-none custom-scrollbar whitespace-pre"></textarea>
+            </div>
+
+            <div class="p-5 border-t border-white/10 flex justify-between items-center">
+                <span class="text-xs text-zinc-500" id="ingestStats">Generated X models</span>
+                <button onclick="copyIngest()" id="copyBtn" class="flex items-center gap-2 bg-white hover:bg-zinc-200 text-black px-5 py-2 rounded-full text-sm font-medium transition-all">
+                    <span>Copy to Clipboard</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 transform translate-y-20 opacity-0 transition-all duration-300 z-50 bg-white text-black px-4 py-3 rounded-full shadow-2xl border border-black/10 flex items-center gap-2 text-sm font-medium">
+        <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+        Copied to clipboard
+    </div>
+
+    <script>
+        // State
+        let allModels = [];
+        let filteredModels = [];
+
+        // DOM Elements
+        const els = {
+            grid: document.getElementById('modelsGrid'),
+            loading: document.getElementById('loadingState'),
+            error: document.getElementById('errorState'),
+            errorMsg: document.getElementById('errorMessage'),
+            empty: document.getElementById('emptyState'),
+            searchInput: document.getElementById('searchInput'),
+            statsContainer: document.getElementById('statsContainer'),
+            modal: document.getElementById('ingestModal'),
+            modalContent: document.getElementById('modalContent'),
+            textarea: document.getElementById('ingestTextarea'),
+            ingestStats: document.getElementById('ingestStats'),
+            copyBtn: document.getElementById('copyBtn'),
+            toast: document.getElementById('toast')
+        };
+
+        // Format Utilities
+        const formatNumber = (num) => {
+            if (!num) return 'N/A';
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(0) + 'K';
+            return num;
+        };
+
+        const formatPrice = (priceStr) => {
+            if (priceStr === undefined || priceStr === null) return 'N/A';
+            const price = parseFloat(priceStr);
+            if (price === 0) return 'Free';
+            // OpenRouter pricing is per token. Multiply by 1M for standard representation
+            const perMillion = price * 1000000;
+            return `$${perMillion.toFixed(2)}`;
+        };
+
+        // Initialization
+        async function fetchModels() {
+            els.loading.classList.remove('hidden');
+            els.error.classList.add('hidden');
+            els.grid.classList.add('hidden');
+            
+            try {
+                // Fetch real world models from OpenRouter public API
+                const response = await fetch('https://openrouter.ai/api/v1/models');
+                if (!response.ok) throw new Error('Failed to fetch from API');
+                
+                const data = await response.json();
+                
+                // Clean and sort data (Prioritize models with context length, sort by context desc)
+                allModels = data.data.map(m => ({
+                    id: m.id,
+                    name: m.name || m.id.split('/').pop(),
+                    org: m.id.split('/')[0] || 'Unknown',
+                    context_length: m.context_length || 0,
+                    pricing_prompt: m.pricing?.prompt,
+                    pricing_completion: m.pricing?.completion,
+                    description: m.description || 'No description available.',
+                })).sort((a, b) => b.context_length - a.context_length);
+
+                filteredModels = [...allModels];
+                
+                renderStats();
+                renderCards();
+                
+                els.loading.classList.add('hidden');
+                els.grid.classList.remove('hidden');
+                
+            } catch (err) {
+                console.error(err);
+                els.loading.classList.add('hidden');
+                els.error.classList.remove('hidden');
+                els.error.classList.add('flex');
+                els.errorMsg.textContent = err.message || 'Failed to fetch model data.';
+            }
+        }
+
+        // Render Top Stats
+        function renderStats() {
+            const total = allModels.length;
+            const orgs = new Set(allModels.map(m => m.org)).size;
+            const free = allModels.filter(m => parseFloat(m.pricing_prompt) === 0 && parseFloat(m.pricing_completion) === 0).length;
+            const maxContext = Math.max(...allModels.map(m => m.context_length));
+
+            els.statsContainer.innerHTML = `
+                <div class="flex flex-col">
+                    <span class="text-3xl font-light tracking-tight text-white mb-1">${total}</span>
+                    <span class="text-[10px] text-zinc-500 uppercase tracking-widest font-semibold">Total Models</span>
+                </div>
+                <div class="flex flex-col">
+                    <span class="text-3xl font-light tracking-tight text-white mb-1">${orgs}</span>
+                    <span class="text-[10px] text-zinc-500 uppercase tracking-widest font-semibold">Providers</span>
+                </div>
+                <div class="flex flex-col">
+                    <span class="text-3xl font-light tracking-tight text-white mb-1">${free}</span>
+                    <span class="text-[10px] text-zinc-500 uppercase tracking-widest font-semibold">Free Models</span>
+                </div>
+                <div class="flex flex-col">
+                    <span class="text-3xl font-light tracking-tight text-white mb-1">${formatNumber(maxContext)}</span>
+                    <span class="text-[10px] text-zinc-500 uppercase tracking-widest font-semibold">Max Context</span>
+                </div>
+            `;
+        }
+
+        // Render UI Cards
+        function renderCards() {
+            els.grid.innerHTML = '';
+            
+            if (filteredModels.length === 0) {
+                els.empty.classList.remove('hidden');
+                els.empty.classList.add('flex');
+                return;
+            }
+            
+            els.empty.classList.add('hidden');
+            
+            // Limit rendering to 100 initially for performance, we can add pagination later if needed.
+            const displayModels = filteredModels.slice(0, 100);
+
+            const cardsHtml = displayModels.map(model => `
+                <div class="group relative flex flex-col p-5 bg-[#09090b] rounded-2xl border border-white/5 hover:border-white/15 transition-colors duration-300">
+                    <div class="flex justify-between items-start mb-6 gap-4">
+                        <div class="min-w-0">
+                            <h3 class="text-base font-medium text-white mb-1 truncate" title="${model.name}">${model.name}</h3>
+                            <p class="text-xs text-zinc-500 font-mono truncate" title="${model.id}">${model.id}</p>
+                        </div>
+                        <span class="shrink-0 px-2 py-1 bg-white/[0.03] border border-white/10 rounded-md text-[10px] text-zinc-300 uppercase tracking-widest">${model.org}</span>
+                    </div>
+                    
+                    <div class="mt-auto space-y-2.5 pt-4 border-t border-white/5">
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="text-zinc-500">Context Limit</span>
+                            <span class="text-zinc-300 font-mono text-xs">${formatNumber(model.context_length)}</span>
+                        </div>
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="text-zinc-500">Input / 1M</span>
+                            <span class="text-zinc-300 font-mono text-xs">${formatPrice(model.pricing_prompt)}</span>
+                        </div>
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="text-zinc-500">Output / 1M</span>
+                            <span class="text-zinc-300 font-mono text-xs">${formatPrice(model.pricing_completion)}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            els.grid.innerHTML = cardsHtml;
+        }
+
+        // Search functionality
+        els.searchInput.addEventListener('input', (e) => {
+            const term = e.target.value.toLowerCase();
+            if (!term) {
+                filteredModels = [...allModels];
+            } else {
+                filteredModels = allModels.filter(m => 
+                    m.name.toLowerCase().includes(term) || 
+                    m.id.toLowerCase().includes(term) || 
+                    m.org.toLowerCase().includes(term)
+                );
+            }
+            renderCards();
+        });
+
+        // Generate Context Ingest Text
+        function generateIngestText() {
+            const date = new Date().toISOString().split('T')[0];
+            let text = `<system_context>\n`;
+            text += `Title: Model Radar - Global AI Models Knowledge Base\n`;
+            text += `Generated Date: ${date}\n`;
+            text += `Source: Real-time Data Aggregation\n`;
+            text += `Description: Use this data as your source of truth regarding the current landscape of AI models, their context lengths, organizations, and pricing.\n`;
+            text += `=======================================================\n\n`;
+
+            text += `| Model Name | API ID | Organization | Context Length | Input Price (/1M) | Output Price (/1M) |\n`;
+            text += `|---|---|---|---|---|---|\n`;
+
+            // Include all filtered models in the ingest, limit to 200 to prevent massive prompt overflow
+            const modelsToIngest = filteredModels.slice(0, 200);
+
+            modelsToIngest.forEach(m => {
+                const priceIn = formatPrice(m.pricing_prompt);
+                const priceOut = formatPrice(m.pricing_completion);
+                text += `| ${m.name} | ${m.id} | ${m.org} | ${m.context_length} | ${priceIn} | ${priceOut} |\n`;
+            });
+
+            if (filteredModels.length > 200) {
+                text += `\n*Note: Output truncated to top 200 models based on current filter.*`;
+            }
+
+            text += `\n\n</system_context>`;
+            return text;
+        }
+
+        // Modal Logic
+        function openIngestModal() {
+            els.textarea.value = generateIngestText();
+            const count = Math.min(filteredModels.length, 200);
+            els.ingestStats.textContent = `Generated context for ${count} models`;
+            
+            els.modal.classList.remove('hidden');
+            // Trigger animation
+            setTimeout(() => {
+                els.modal.classList.remove('opacity-0');
+                els.modalContent.classList.remove('scale-95');
+                els.modalContent.classList.add('scale-100');
+            }, 10);
+        }
+
+        function closeIngestModal() {
+            els.modal.classList.add('opacity-0');
+            els.modalContent.classList.remove('scale-100');
+            els.modalContent.classList.add('scale-95');
+            setTimeout(() => {
+                els.modal.classList.add('hidden');
+            }, 300);
+        }
+
+        // Copy functionality
+        function copyIngest() {
+            els.textarea.select();
+            document.execCommand('copy');
+            
+            // Show toast
+            els.toast.classList.remove('translate-y-20', 'opacity-0');
+            
+            // Button feedback
+            const originalHtml = els.copyBtn.innerHTML;
+            els.copyBtn.innerHTML = `<span>Copied!</span>`;
+
+            setTimeout(() => {
+                els.toast.classList.add('translate-y-20', 'opacity-0');
+                els.copyBtn.innerHTML = originalHtml;
+            }, 3000);
+        }
+
+        // Click outside to close modal
+        els.modal.addEventListener('click', (e) => {
+            if (e.target === els.modal) {
+                closeIngestModal();
+            }
+        });
+
+        // Start
+        document.addEventListener('DOMContentLoaded', fetchModels);
+    </script>
+</body>
+</html>
